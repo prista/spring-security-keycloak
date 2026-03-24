@@ -10,6 +10,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.security.Principal;
 import java.util.Map;
 
 @RestController
@@ -38,6 +39,13 @@ public class GreetingsRestController {
         return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(Map.of("greeting", "Hello, %s!".formatted(userDetails.getUsername())));
+    }
+
+    @GetMapping("/api/v5/greetings")
+    public ResponseEntity<Map<String, String>> getGreetingsV5(Principal principal) {
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(Map.of("greeting", "Hello, %s!".formatted(principal.getName())));
     }
 
 }
