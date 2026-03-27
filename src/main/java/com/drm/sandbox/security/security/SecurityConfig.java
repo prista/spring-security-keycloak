@@ -14,12 +14,15 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         return http
                 //.httpBasic(Customizer.withDefaults())
-                .authorizeHttpRequests(authorize ->
-                        authorize.anyRequest().authenticated())
+                .authorizeHttpRequests(authorize -> {
+                            authorize.requestMatchers("/public/**").permitAll();
+                            authorize.anyRequest().authenticated();
+                        }
+
+                )
                 .exceptionHandling(exceptionHandling -> exceptionHandling
                         .authenticationEntryPoint((request, response, authException) -> {
-                                    authException.printStackTrace();
-                                    response.sendError(HttpStatus.UNAUTHORIZED.value());
+                                    response.sendRedirect("http://localhost:8080/public/403.html");
                                 }
                         ))
                 .build();
