@@ -13,18 +13,24 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         return http
-                //.httpBasic(Customizer.withDefaults())
+                .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(authorize -> {
                             authorize.requestMatchers("/public/**").permitAll();
                             authorize.anyRequest().authenticated();
                         }
-
+                )
+                .formLogin(form -> form
+                        .loginPage("/public/sign-in.html")
+                        .loginProcessingUrl("/login")
+                        .defaultSuccessUrl("/api/v1/greetings")
+                        .permitAll()
                 )
                 .exceptionHandling(exceptionHandling -> exceptionHandling
-                        .authenticationEntryPoint((request, response, authException) -> {
-                                    response.sendRedirect("http://localhost:8080/public/403.html");
-                                }
-                        ))
+                        .authenticationEntryPoint((request,
+                                                   response,
+                                                   authException) ->
+                                response.sendRedirect("/public/sign-in.html"))
+                )
                 .build();
     }
 }
