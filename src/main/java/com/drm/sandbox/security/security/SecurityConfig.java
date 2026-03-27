@@ -2,34 +2,30 @@ package com.drm.sandbox.security.security;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.HttpStatus;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.www.BasicAuthenticationEntryPoint;
 
 @Configuration
 public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        var basicAuthenticationEntryPoint = new BasicAuthenticationEntryPoint();
+        basicAuthenticationEntryPoint.setRealmName("Realm");
         return http
-                .csrf(csrf -> csrf.disable())
-                .authorizeHttpRequests(authorize -> {
-                            authorize.requestMatchers("/public/**").permitAll();
-                            authorize.anyRequest().authenticated();
-                        }
+                .httpBasic(basic -> basic
+                        .authenticationEntryPoint((request, response, authException) -> {
+                            authException.printStackTrace();
+                            basicAuthenticationEntryPoint.commence(request, response, authException);
+                        })
                 )
-                .formLogin(form -> form
-                        .loginPage("/public/sign-in.html")
-                        .loginProcessingUrl("/login")
-                        .defaultSuccessUrl("/api/v1/greetings")
-                        .permitAll()
+                .authorizeHttpRequests(authorize ->
+                        authorize.anyRequest().authenticated()
                 )
                 .exceptionHandling(exceptionHandling -> exceptionHandling
-                        .authenticationEntryPoint((request,
-                                                   response,
-                                                   authException) ->
-                                response.sendRedirect("/public/sign-in.html"))
+                        .authenticationEntryPoint(basicAuthenticationEntryPoint)
                 )
                 .build();
     }
