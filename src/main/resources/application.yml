@@ -1,0 +1,7 @@
+spring:
+  security:
+    user:
+      password: password
+  sql:
+    init:
+      mode: always
