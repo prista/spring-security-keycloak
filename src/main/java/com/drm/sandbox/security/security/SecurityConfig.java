@@ -19,6 +19,10 @@ public class SecurityConfig {
                                     .anyRequest().authenticated();
                         }
                 )
+                .exceptionHandling(handlingConfigurer -> handlingConfigurer
+                        .accessDeniedHandler((request, response, accessDeniedException) -> {
+                            accessDeniedException.printStackTrace();
+                        }))
                 .build();
     }
 }
