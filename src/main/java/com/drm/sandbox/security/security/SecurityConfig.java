@@ -11,18 +11,9 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        http.apply(new MyConfigurer())
+                .realmName("My custom realm name~");
         return http
-                .httpBasic(Customizer.withDefaults())
-                .authorizeHttpRequests(authorize -> {
-                            authorize
-                                    .requestMatchers("/public/test", "/error").permitAll()
-                                    .anyRequest().authenticated();
-                        }
-                )
-                .exceptionHandling(handlingConfigurer -> handlingConfigurer
-                        .accessDeniedHandler((request, response, accessDeniedException) -> {
-                            accessDeniedException.printStackTrace();
-                        }))
                 .build();
     }
 }
