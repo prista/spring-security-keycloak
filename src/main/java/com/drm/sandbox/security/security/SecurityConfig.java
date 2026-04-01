@@ -14,7 +14,9 @@ public class SecurityConfig {
         return http
                 .httpBasic(Customizer.withDefaults())
                 .authorizeHttpRequests(authorize -> {
-                            authorize.anyRequest().authenticated();
+                            authorize
+                                    .requestMatchers("/public/test", "/error").permitAll()
+                                    .anyRequest().authenticated();
                         }
                 )
                 .build();
