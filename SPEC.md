@@ -43,8 +43,8 @@ Base package: `com.drm.sandbox.security`
 All endpoints require authentication via a custom Hex-encoded credentials scheme.
 
 - `security/SecurityConfig` — configures `SecurityFilterChain`: all requests require authentication (except `/error`), applies `HexConfigurer`
-- `security/HexConfigurer` — custom `AbstractHttpConfigurer` that registers `HexAuthenticationFilter` before `BasicAuthenticationFilter` and sets up a custom `AuthenticationEntryPoint` responding with `WWW-Authenticate: Hex`
-- `security/HexAuthenticationFilter` — custom `OncePerRequestFilter` that extracts `Authorization: Hex <hex-encoded username:password>` header, decodes it, and authenticates via `AuthenticationManager`
+- `security/HexConfigurer` — custom `AbstractHttpConfigurer` that registers Spring's `AuthenticationFilter` (with `HexAuthenticationConverter`) before `BasicAuthenticationFilter`, configures success/failure handlers, and sets up a custom `AuthenticationEntryPoint` responding with `WWW-Authenticate: Hex`
+- `security/HexAuthenticationConverter` — `AuthenticationConverter` that extracts `Authorization: Hex <hex-encoded username:password>` header, decodes it, and returns an unauthenticated `UsernamePasswordAuthenticationToken`
 - `security/JdbcUserDetailsService` — extends `MappingSqlQuery<UserDetails>`, implements `UserDetailsService`. Loads users from PostgreSQL using a named-parameter query with `array_agg()` for authorities
 - `UserDetailsService` bean is registered in `SecurityApplication`
 
