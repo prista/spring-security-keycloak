@@ -1,0 +1,90 @@
+{
+  "realm": "eselpo",
+  "enabled": true,
+  "registrationAllowed": false,
+  "clients": [
+    {
+      "clientId": "springsecurity",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "YVL5O9cpg8KJpSwcoVICDZCfLmLzZGPA",
+      "redirectUris": [
+        "http://localhost:8081/*"
+      ],
+      "webOrigins": [
+        "http://localhost:8081"
+      ],
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "protocolMappers": [
+        {
+          "name": "spring_sec_roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-client-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "multivalued": "true",
+            "userinfo.token.claim": "true",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "spring_sec_roles",
+            "jsonType.label": "String",
+            "usermodel.clientRoleMapping.clientId": "springsecurity"
+          }
+        }
+      ]
+    }
+  ],
+  "roles": {
+    "client": {
+      "springsecurity": [
+        {
+          "name": "ROLE_MANAGER",
+          "description": "Manager role for accessing /manager.html"
+        },
+        {
+          "name": "ROLE_USER",
+          "description": "Basic user role"
+        }
+      ]
+    }
+  },
+  "users": [
+    {
+      "username": "manager",
+      "enabled": true,
+      "email": "manager@example.com",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "manager",
+          "temporary": false
+        }
+      ],
+      "clientRoles": {
+        "springsecurity": [
+          "ROLE_MANAGER",
+          "ROLE_USER"
+        ]
+      }
+    },
+    {
+      "username": "user",
+      "enabled": true,
+      "email": "user@example.com",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user",
+          "temporary": false
+        }
+      ],
+      "clientRoles": {
+        "springsecurity": [
+          "ROLE_USER"
+        ]
+      }
+    }
+  ]
+}

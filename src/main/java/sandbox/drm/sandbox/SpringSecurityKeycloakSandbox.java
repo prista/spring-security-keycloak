@@ -1,4 +1,4 @@
-package pro.akosarev.sandbox;
+package sandbox.drm.sandbox;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -16,8 +16,6 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
 
-import java.util.Collection;
-import java.util.List;
 import java.util.stream.Stream;
 
 @SpringBootApplication
