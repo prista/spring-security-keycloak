@@ -37,6 +37,7 @@ public class SpringSecurityKeycloakSandbox {
                 .build();
     }
 
+    // Used by the OAuth2 resource server (Bearer JWT requests) to map roles from the token.
     @Bean
     public JwtAuthenticationConverter jwtAuthenticationConverter() {
         var converter = new JwtAuthenticationConverter();
@@ -57,6 +58,7 @@ public class SpringSecurityKeycloakSandbox {
         return converter;
     }
 
+    // Used only by the OAuth2 client (browser OIDC login) to map roles into the session user.
     @Bean
     public OAuth2UserService<OidcUserRequest, OidcUser> oAuth2UserService() {
         var oidcUserService = new OidcUserService();
