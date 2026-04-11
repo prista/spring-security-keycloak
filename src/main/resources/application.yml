@@ -1,14 +1,22 @@
 spring:
-  datasource:
-    url: jdbc:postgresql://localhost:5432/security
-    username: security
-    password: security
-  security:
-    user:
-      password: password
+  docker:
+    compose:
+      stop:
+        command: down
   sql:
     init:
       mode: always
-#logging:
-#  level:
-#    org.springframework.security: trace
+jwt:
+  access-token-key: '{"kty":"oct","k":"hi7S5RX5ZRZooHA0RKGctZ-KtR9FoESgCnH-3BNg5XI"}'
+  refresh-token-key: '{"kty":"oct","k":"956PBFst1FguLr5irJD-aQ"}'
+server:
+  http2:
+    enabled: true
+  ssl:
+    key-store: /Users/viktarburba/tmp/ssl/keystore/localhost.p12
+    key-store-password: password
+    key-alias: localhost
+  port: 8443
+logging:
+  level:
+    org.springframework.security: trace
