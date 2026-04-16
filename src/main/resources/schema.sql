@@ -1,3 +1,8 @@
+drop table if exists t_user_password cascade;
+drop table if exists t_deactivated_token cascade;
+drop table if exists t_user_authority cascade;
+drop table if exists t_user cascade;
+
 create table t_user
 (
     id         int primary key,
