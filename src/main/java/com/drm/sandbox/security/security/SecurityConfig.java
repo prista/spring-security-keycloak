@@ -1,11 +1,11 @@
 package com.drm.sandbox.security.security;
 
-import com.drm.sandbox.security.AccessTokenJwsStringSerializer;
-import com.drm.sandbox.security.JwtAuthenticationConfigurer;
-import com.drm.sandbox.security.RefreshTokenJweStringSerializer;
+import com.drm.sandbox.security.*;
 import com.nimbusds.jose.JOSEException;
+import com.nimbusds.jose.crypto.DirectDecrypter;
 import com.nimbusds.jose.crypto.DirectEncrypter;
 import com.nimbusds.jose.crypto.MACSigner;
+import com.nimbusds.jose.crypto.MACVerifier;
 import com.nimbusds.jose.jwk.OctetSequenceKey;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -30,16 +30,19 @@ public class SecurityConfig {
             @Value("${jwt.refresh-token-key}") String refreshTokenKey
     ) throws ParseException, JOSEException {
         return new JwtAuthenticationConfigurer()
-                .accessTokenStringSerializer(
-                        new AccessTokenJwsStringSerializer(
-                                new MACSigner(OctetSequenceKey.parse(accessTokeKey))
-                        )
+                .accessTokenStringSerializer(new AccessTokenJwsStringSerializer(
+                                new MACSigner(OctetSequenceKey.parse(accessTokeKey)))
                 )
-                .refreshTokenStringSerializer(
-                        new RefreshTokenJweStringSerializer(
-                                new DirectEncrypter(OctetSequenceKey.parse(refreshTokenKey))
-                        )
-                );
+                .refreshTokenStringSerializer(new RefreshTokenJweStringSerializer(
+                                new DirectEncrypter(OctetSequenceKey.parse(refreshTokenKey)))
+                )
+                .accessTokenStringDeserializer(new AccessTokenJwsStringDeserializer(
+                                new MACVerifier(OctetSequenceKey.parse(accessTokeKey)))
+                )
+                .refreshTokenStringDeserializer(new RefreshTokenJweStringDeserializer(
+                        new DirectDecrypter(OctetSequenceKey.parse(refreshTokenKey))
+                ));
+
     }
 
     @Bean
@@ -51,7 +54,7 @@ public class SecurityConfig {
         return http
                 .httpBasic(Customizer.withDefaults())
                 .sessionManagement(session ->
-                    session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                        session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(c -> c
                         // /error is default view "Whitelabel Error Page"
                         .requestMatchers("/error").permitAll()
