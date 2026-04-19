@@ -78,8 +78,11 @@ public class JwtAuthenticationConfigurer
         var authenticationProvider = new PreAuthenticatedAuthenticationProvider();
         authenticationProvider.setPreAuthenticatedUserDetailsService(new TokenAuthenticationUserDetailsService());
 
+        var refreshTokenFilter = new RefreshTokenFilter();
+
         builder.addFilterAfter(requestJwtTokensFilter, ExceptionTranslationFilter.class)
                 .addFilterBefore(jwtAuthenticationFilter, CsrfFilter.class)
+                .addFilterBefore(refreshTokenFilter, ExceptionTranslationFilter.class)
                 .authenticationProvider(authenticationProvider);
     }
 }
