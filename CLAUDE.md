@@ -47,8 +47,19 @@ Response:
 }
 ```
 
-- access token — JWS, signed HS256 with `jwt.access-token-key` from `application.yml`
-- refresh token — JWE, encrypted `dir` + `A128GCM` with `jwt.refresh-token-key`
+- **access token** — short-lived (5 min) bearer credential sent with every
+  protected request. JWS, signed HS256 with `jwt.access-token-key`.
+- **refresh token** — long-lived (1 day) credential used only to mint a new
+  access token via `POST /jwt/refresh`. JWE, encrypted `dir` + `A128GCM` with
+  `jwt.refresh-token-key`. Encrypting (not just signing) hides the claims from
+  the client, since they are server-internal.
+
+The split keeps the access token cheap/stateless with a small leak window and
+confines the long-lived credential to a single endpoint.
+
+> Both tokens are plaintext bearer credentials — anyone holding the string
+> can use it. The app is served over HTTPS only (port `8443`, HTTP/2) so
+> tokens never travel in clear on the wire.
 
 ### 2. Call the greeting endpoints (initial sign-in still HTTP Basic)
 
@@ -69,28 +80,37 @@ GET https://localhost:8443/manager.html
 Authorization: Bearer <accessToken from step 1>
 ```
 
-`JwtAuthenticationConverter` accepts both the access (JWS) and refresh (JWE)
-token as the `Bearer` value; `TokenAuthenticationUserDetailsService` wraps
-the resulting `Token` into a `TokenUser`. `/manager.html` additionally
-requires `ROLE_MANAGER` (held by `j.jameson`). An invalid or expired token
-returns `403 Invalid or expired token`.
+`/manager.html` additionally requires `ROLE_MANAGER` (held by `j.jameson`).
+An invalid or expired token returns `403 Invalid or expired token`.
+
+### 4. Refresh the access token
+
+```
+POST https://localhost:8443/jwt/refresh
+Authorization: Bearer <refreshToken from step 1>
+```
+
+Returns a fresh access token (refresh token is reused). The refresh token
+carries a `JWT_REFRESH` authority; `RefreshTokenFilter` checks for it before
+minting, so an access token cannot be used here.
 
 ## Key classes
 
 - `security/SecurityConfig` — filter chain, HTTP Basic, stateless sessions,
-  `/manager.html` restricted to `ROLE_MANAGER`; also declares the JDBC
+  `/manager.html` restricted to `ROLE_MANAGER`; declares the JDBC
   `UserDetailsService` bean
-- `JwtAuthenticationConfigurer` — registers `RequestJwsTokensFilter` (minting)
-  after `ExceptionTranslationFilter` **and** `AuthenticationFilter` with
-  `JwtAuthenticationConverter` before `CsrfFilter`. Disables CSRF for
-  `POST /jwt/tokens`; a successful bearer authentication triggers
-  `CsrfFilter.skipRequest`; a failure returns 403
-- `RequestJwsTokensFilter` — matches `POST /jwt/tokens`, issues the token pair
-- `AccessTokenJwsStringSerializer` / `RefreshTokenJweStringSerializer` — Nimbus
-  JOSE + JWT serializers for the two token types
-- `AccessTokenJwsStringDeserializer` / `RefreshTokenJweStringDeserializer` —
-  Nimbus deserializers (parse + verify/decrypt) that map claims back to `Token`
-- `JwtAuthenticationConverter` — `AuthenticationConverter` for
-  `Authorization: Bearer ...`, tries access then refresh
+- `JwtAuthenticationConfigurer` — wires three filters: `RequestJwsTokensFilter`
+  (mint on `POST /jwt/tokens`), `AuthenticationFilter` with
+  `JwtAuthenticationConverter` (bearer auth, before `CsrfFilter`),
+  `RefreshTokenFilter` (mint on `POST /jwt/refresh`). Disables CSRF for
+  `POST /jwt/tokens`; on successful bearer auth triggers `CsrfFilter.skipRequest`;
+  on failure returns 403
+- `RequestJwsTokensFilter` / `RefreshTokenFilter` — issue the token pair /
+  a fresh access token
+- `AccessTokenJwsStringSerializer` + `Deserializer` /
+  `RefreshTokenJweStringSerializer` + `Deserializer` — Nimbus JOSE + JWT
+  (de)serializers for the two token types
+- `JwtAuthenticationConverter` — reads `Authorization: Bearer ...`, tries access
+  then refresh
 - `TokenAuthenticationUserDetailsService` + `TokenUser` — turn a `Token` into a
   `UserDetails` for `PreAuthenticatedAuthenticationProvider`

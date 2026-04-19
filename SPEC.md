@@ -9,9 +9,15 @@ clients, layered on top of HTTP Basic for initial login.
 ### Core Features
 
 - HTTP Basic authentication for initial sign-in (stateless sessions)
-- `POST /jwt/tokens` endpoint that mints a pair of tokens for the authenticated user:
-  - **access token** — signed JWS (HS256, MAC)
-  - **refresh token** — encrypted JWE (`dir` + `A128GCM`)
+- `POST /jwt/tokens` mints a pair of tokens for the authenticated user:
+  - **access token** — short-lived JWS (HS256, MAC; default 5 min). Sent with
+    every protected request; stateless and self-verifying.
+  - **refresh token** — long-lived JWE (`dir` + `A128GCM`; default 1 day).
+    Used only to mint a new access token; encryption hides the server-internal
+    claims (`JWT_REFRESH`, `JWT_LOGOUT`, `GRANT_*`) from the client.
+- `POST /jwt/refresh` accepts a refresh JWE as a bearer credential and returns
+  a fresh access JWS. Enforced by a `JWT_REFRESH` authority in the refresh
+  token so an access token cannot be replayed against this endpoint.
 - **Bearer-token authentication** for all other protected endpoints:
   `Authorization: Bearer <access-JWS|refresh-JWE>` is handled by
   `AuthenticationFilter` + `JwtAuthenticationConverter` +
@@ -20,10 +26,6 @@ clients, layered on top of HTTP Basic for initial login.
 - 5 different approaches to accessing the authenticated principal on `/api/v*/greetings` (only v4 implemented so far)
 - JDBC-backed user/authority store on PostgreSQL
 - HTTPS + HTTP/2 on port `8443` using a local PKCS#12 keystore
-
-### Roadmap
-
-- **Next**: access-token refresh endpoint — accepts a refresh JWE and mints a fresh access JWS. Right now the refresh token is issued and accepted as a bearer credential, but there is no dedicated refresh flow.
 
 ### Tech Stack
 
@@ -72,6 +74,9 @@ All endpoints require authentication; the filter chain is stateless.
     - success handler calls `CsrfFilter.skipRequest(request)` so CSRF is
       bypassed for requests authenticated by a valid token
     - failure handler returns `403` with body `"Invalid or expired token"`
+  - registers `RefreshTokenFilter` before `ExceptionTranslationFilter`
+    (access-token minting on `POST /jwt/refresh`), wired with the configurer's
+    `accessTokenStringSerializer` so the response carries a real JWS
   - registers a `PreAuthenticatedAuthenticationProvider` backed by
     `TokenAuthenticationUserDetailsService`
   - in `init()` disables CSRF for `POST /jwt/tokens` via
@@ -81,6 +86,11 @@ All endpoints require authentication; the filter chain is stateless.
   Loads the current `SecurityContext`, rejects `PreAuthenticatedAuthenticationToken`,
   builds a refresh token then an access token via configurable factories, serializes
   them and writes the pair as JSON.
+- `RefreshTokenFilter` — `OncePerRequestFilter` matched to `POST /jwt/refresh`.
+  Requires a `SecurityContext` populated by the bearer-auth filter, verifies the
+  principal is a `TokenUser` carrying a `JWT_REFRESH` authority (i.e. an access
+  token cannot be used here), derives a new access token via `DefaultAccessTokenFactory`
+  and writes it as JSON. Refresh token itself is not rotated in this implementation.
 - `JwtAuthenticationConverter` — `AuthenticationConverter` that reads the
   `Authorization` header, requires the `Bearer ` prefix, tries to parse the
   remainder first as an access (JWS) then as a refresh (JWE) token. On success
@@ -102,22 +112,18 @@ All endpoints require authentication; the filter chain is stateless.
 - `Tokens` — response record `{accessToken, accessTokenExpiry, refreshToken,
   refreshTokenExpiry}`
 - `DefaultRefreshTokenFactory` — `Function<Authentication, Token>`, builds the
-  refresh token from an authenticated principal
+  refresh token from an authenticated principal. Adds `JWT_REFRESH`, `JWT_LOGOUT`
+  and `GRANT_<role>` authorities (the `GRANT_` prefix carries the original
+  authorities through to the derived access token).
 - `DefaultAccessTokenFactory` — `Function<Token, Token>`, derives a shorter-lived
-  access token from the refresh token
-- `AccessTokenJwsStringSerializer` — `Function<Token, String>`, serializes a
-  `Token` to a JWS compact string using a `JWSSigner` (default HS256)
-- `RefreshTokenJweStringSerializer` — `Function<Token, String>`, serializes a
-  `Token` to a JWE compact string using a `JWEEncrypter` (default `dir` + `A128GCM`)
-- `AccessTokenJwsStringDeserializer` — `Function<String, Token>`, parses a JWS
-  compact string and verifies it with a `JWSVerifier`; on success the claim set
-  is mapped to a `Token`, on failure returns `null`
-- `RefreshTokenJweStringDeserializer` — `Function<String, Token>`, parses a JWE
-  compact string and decrypts it with a `JWEDecrypter`; on success the claim
-  set is mapped to a `Token`, on failure returns `null`
-- `TokenUser` — `UserDetails` that carries the original `Token` (see §2.1)
-- `TokenAuthenticationUserDetailsService` — turns an incoming `Token` into a
-  `TokenUser` (see §2.1)
+  access token from the refresh token; keeps only the `GRANT_*` authorities,
+  stripping the `GRANT_` prefix.
+- `AccessTokenJwsStringSerializer` / `Deserializer` — JWS compact (de)serialization
+  using `JWSSigner` / `JWSVerifier` (default HS256). Deserializer returns `null`
+  on parse/verify failure.
+- `RefreshTokenJweStringSerializer` / `Deserializer` — JWE compact
+  (de)serialization using `JWEEncrypter` / `JWEDecrypter` (default `dir` +
+  `A128GCM`). Deserializer returns `null` on parse/decrypt failure.
 
 ### 2.3 Greeting Endpoints
 
@@ -153,9 +159,8 @@ Seed data:
 
 Configured in `application.yml`:
 - `server.port: 8443`
-- `server.ssl.*` — PKCS#12 keystore at
-  `/Users/viktar-b/tmp/ssl/keystore/localhost.p12` (alias `localhost`,
-  password `password`)
+- `server.ssl.*` — PKCS#12 keystore at `${user.home}/tmp/ssl/keystore/localhost.p12`
+  (alias `localhost`, password `password`)
 - `server.http2.enabled: true`
 - `logging.level.org.springframework.security: trace` — enabled for dev to
   surface the full filter-chain decisions
@@ -193,9 +198,9 @@ Port:        5432
 Generate the dev keystore once:
 
 ```bash
-mkdir -p /Users/viktar-b/tmp/ssl/keystore
+mkdir -p ~/tmp/ssl/keystore
 keytool -genkeypair -alias localhost -keyalg RSA -keysize 2048 -storetype PKCS12 \
-  -keystore /Users/viktar-b/tmp/ssl/keystore/localhost.p12 \
+  -keystore ~/tmp/ssl/keystore/localhost.p12 \
   -storepass password -keypass password -validity 365 \
   -dname "CN=localhost, OU=dev, O=dev, L=dev, S=dev, C=BY" \
   -ext "SAN=dns:localhost,ip:127.0.0.1"
