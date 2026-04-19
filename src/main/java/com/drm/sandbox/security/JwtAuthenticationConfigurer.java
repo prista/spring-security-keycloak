@@ -79,6 +79,7 @@ public class JwtAuthenticationConfigurer
         authenticationProvider.setPreAuthenticatedUserDetailsService(new TokenAuthenticationUserDetailsService());
 
         var refreshTokenFilter = new RefreshTokenFilter();
+        refreshTokenFilter.setAccessTokenStringSerializer(this.accessTokenStringSerializer);
 
         builder.addFilterAfter(requestJwtTokensFilter, ExceptionTranslationFilter.class)
                 .addFilterBefore(jwtAuthenticationFilter, CsrfFilter.class)
