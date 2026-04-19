@@ -13,7 +13,7 @@ server:
   http2:
     enabled: true
   ssl:
-    key-store: /Users/viktarburba/tmp/ssl/keystore/localhost.p12
+    key-store: ${user.home}/tmp/ssl/keystore/localhost.p12
     key-store-password: password
     key-alias: localhost
   port: 8443

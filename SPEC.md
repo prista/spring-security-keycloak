@@ -12,9 +12,18 @@ clients, layered on top of HTTP Basic for initial login.
 - `POST /jwt/tokens` endpoint that mints a pair of tokens for the authenticated user:
   - **access token** — signed JWS (HS256, MAC)
   - **refresh token** — encrypted JWE (`dir` + `A128GCM`)
-- 5 different approaches to accessing the authenticated principal on `/api/v*/greetings`
+- **Bearer-token authentication** for all other protected endpoints:
+  `Authorization: Bearer <access-JWS|refresh-JWE>` is handled by
+  `AuthenticationFilter` + `JwtAuthenticationConverter` +
+  `PreAuthenticatedAuthenticationProvider`, producing a `TokenUser`
+  (a `UserDetails` that carries the original `Token`)
+- 5 different approaches to accessing the authenticated principal on `/api/v*/greetings` (only v4 implemented so far)
 - JDBC-backed user/authority store on PostgreSQL
 - HTTPS + HTTP/2 on port `8443` using a local PKCS#12 keystore
+
+### Roadmap
+
+- **Next**: access-token refresh endpoint — accepts a refresh JWE and mints a fresh access JWS. Right now the refresh token is issued and accepted as a bearer credential, but there is no dedicated refresh flow.
 
 ### Tech Stack
 
@@ -42,22 +51,49 @@ Base package: `com.drm.sandbox.security`
 
 All endpoints require authentication; the filter chain is stateless.
 
-- `security/SecurityConfig` — declares two beans:
-  - `jwtAuthenticationConfigurer` — builds `JwtAuthenticationConfigurer` with
-    `AccessTokenJwsStringSerializer` (MAC-signed, keyed from `jwt.access-token-key`)
-    and `RefreshTokenJweStringSerializer` (direct-encrypted, keyed from
-    `jwt.refresh-token-key`)
+- `security/SecurityConfig` — declares three beans:
+  - `jwtAuthenticationConfigurer` — builds `JwtAuthenticationConfigurer` wired
+    with four functions:
+    - `AccessTokenJwsStringSerializer` (MAC, `jwt.access-token-key`)
+    - `RefreshTokenJweStringSerializer` (`dir`, `jwt.refresh-token-key`)
+    - `AccessTokenJwsStringDeserializer` (MAC-verify with the same key)
+    - `RefreshTokenJweStringDeserializer` (`DirectDecrypter` with the same key)
   - `securityFilterChain` — applies the JWT configurer, enables HTTP Basic, sets
     session policy to `STATELESS`, permits `/error`, restricts `/manager.html` to
     `ROLE_MANAGER`, requires authentication for everything else
-- `JwtAuthenticationConfigurer` — `AbstractHttpConfigurer` that:
-  - disables CSRF for `POST /jwt/tokens` via `PathPatternRequestMatcher` (Spring
-    Security 7 replacement for `AntPathRequestMatcher`)
+  - `userDetailsService` — JDBC implementation over `JdbcTemplate`, reads
+    `t_user` + `t_user_authority`
+- `JwtAuthenticationConfigurer` — `AbstractHttpConfigurer` that, in
+  `configure(HttpSecurity)`:
   - registers `RequestJwsTokensFilter` after `ExceptionTranslationFilter`
+    (token minting on `POST /jwt/tokens`)
+  - registers an `AuthenticationFilter` with `JwtAuthenticationConverter`
+    **before** `CsrfFilter` (bearer-token validation):
+    - success handler calls `CsrfFilter.skipRequest(request)` so CSRF is
+      bypassed for requests authenticated by a valid token
+    - failure handler returns `403` with body `"Invalid or expired token"`
+  - registers a `PreAuthenticatedAuthenticationProvider` backed by
+    `TokenAuthenticationUserDetailsService`
+  - in `init()` disables CSRF for `POST /jwt/tokens` via
+    `PathPatternRequestMatcher` (Spring Security 7 replacement for
+    `AntPathRequestMatcher`)
 - `RequestJwsTokensFilter` — `OncePerRequestFilter` matched to `POST /jwt/tokens`.
   Loads the current `SecurityContext`, rejects `PreAuthenticatedAuthenticationToken`,
   builds a refresh token then an access token via configurable factories, serializes
   them and writes the pair as JSON.
+- `JwtAuthenticationConverter` — `AuthenticationConverter` that reads the
+  `Authorization` header, requires the `Bearer ` prefix, tries to parse the
+  remainder first as an access (JWS) then as a refresh (JWE) token. On success
+  returns `PreAuthenticatedAuthenticationToken(Token, rawString)`; otherwise
+  `null` (the filter treats `null` as "no authentication attempted").
+- `TokenAuthenticationUserDetailsService` — implements
+  `AuthenticationUserDetailsService<PreAuthenticatedAuthenticationToken>`,
+  converts the `Token` carried as principal into a `TokenUser` whose
+  authorities come from the token claims. `credentialsNonExpired` is set to
+  `token.expiresAt() > now()` — this is the main way expired tokens are
+  rejected. Non-`Token` principals raise `UsernameNotFoundException`.
+- `TokenUser` — extends `org.springframework.security.core.userdetails.User`
+  and keeps the raw `Token` accessible via `getToken()` for downstream code.
 
 ### 2.2 Token Model
 
@@ -73,21 +109,31 @@ All endpoints require authentication; the filter chain is stateless.
   `Token` to a JWS compact string using a `JWSSigner` (default HS256)
 - `RefreshTokenJweStringSerializer` — `Function<Token, String>`, serializes a
   `Token` to a JWE compact string using a `JWEEncrypter` (default `dir` + `A128GCM`)
+- `AccessTokenJwsStringDeserializer` — `Function<String, Token>`, parses a JWS
+  compact string and verifies it with a `JWSVerifier`; on success the claim set
+  is mapped to a `Token`, on failure returns `null`
+- `RefreshTokenJweStringDeserializer` — `Function<String, Token>`, parses a JWE
+  compact string and decrypts it with a `JWEDecrypter`; on success the claim
+  set is mapped to a `Token`, on failure returns `null`
+- `TokenUser` — `UserDetails` that carries the original `Token` (see §2.1)
+- `TokenAuthenticationUserDetailsService` — turns an incoming `Token` into a
+  `TokenUser` (see §2.1)
 
 ### 2.3 Greeting Endpoints
 
-The project demonstrates 5 ways to access the authenticated principal:
+The project is meant to demonstrate 5 ways to access the authenticated
+principal. Only `GET /api/v4/greetings` is implemented right now — a
+`RouterFunction<ServerResponse>` bean in `SecurityApplication` that reads the
+principal via `request.principal()`. The other four variants (v1/v2/v3/v5 in a
+planned `GreetingsRestController`) are on the roadmap but not yet added.
 
-| Endpoint | Approach |
-|---|---|
-| `GET /api/v1/greetings` | `SecurityContextHolder.getContext().getAuthentication()` |
-| `GET /api/v2/greetings` | `HttpServletRequest.getUserPrincipal()` |
-| `GET /api/v3/greetings` | `@AuthenticationPrincipal UserDetails` |
-| `GET /api/v4/greetings` | Functional `RouterFunction` + `request.principal()` |
-| `GET /api/v5/greetings` | `Principal` method parameter |
-
-- v1–v3, v5 are in `GreetingsRestController`
-- v4 is a `RouterFunction<ServerResponse>` bean in `SecurityApplication`
+| Endpoint | Approach | Status |
+|---|---|---|
+| `GET /api/v1/greetings` | `SecurityContextHolder.getContext().getAuthentication()` | planned |
+| `GET /api/v2/greetings` | `HttpServletRequest.getUserPrincipal()` | planned |
+| `GET /api/v3/greetings` | `@AuthenticationPrincipal UserDetails` | planned |
+| `GET /api/v4/greetings` | Functional `RouterFunction` + `request.principal()` | **implemented** |
+| `GET /api/v5/greetings` | `Principal` method parameter | planned |
 
 ### 2.4 Database Schema
 
@@ -108,9 +154,11 @@ Seed data:
 Configured in `application.yml`:
 - `server.port: 8443`
 - `server.ssl.*` — PKCS#12 keystore at
-  `/Users/viktarburba/tmp/ssl/keystore/localhost.p12` (alias `localhost`,
+  `/Users/viktar-b/tmp/ssl/keystore/localhost.p12` (alias `localhost`,
   password `password`)
 - `server.http2.enabled: true`
+- `logging.level.org.springframework.security: trace` — enabled for dev to
+  surface the full filter-chain decisions
 
 JWT tokens are bearer credentials, so the application is intentionally exposed
 only over HTTPS. The keystore is a self-signed dev certificate; browsers will
@@ -120,6 +168,8 @@ show a warning.
 
 Served from `src/main/resources/static/`:
 - `hello.html` — greeting page
+- `manager.html` — manager-only page, restricted to `ROLE_MANAGER` in
+  `SecurityConfig`
 - `public/sign-in.html` — login form
 - `public/403.html` — access denied page
 
@@ -143,9 +193,9 @@ Port:        5432
 Generate the dev keystore once:
 
 ```bash
-mkdir -p /Users/viktarburba/tmp/ssl/keystore
+mkdir -p /Users/viktar-b/tmp/ssl/keystore
 keytool -genkeypair -alias localhost -keyalg RSA -keysize 2048 -storetype PKCS12 \
-  -keystore /Users/viktarburba/tmp/ssl/keystore/localhost.p12 \
+  -keystore /Users/viktar-b/tmp/ssl/keystore/localhost.p12 \
   -storepass password -keypass password -validity 365 \
   -dname "CN=localhost, OU=dev, O=dev, L=dev, S=dev, C=BY" \
   -ext "SAN=dns:localhost,ip:127.0.0.1"
