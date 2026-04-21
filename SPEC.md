@@ -77,6 +77,9 @@ All endpoints require authentication; the filter chain is stateless.
   - registers `RefreshTokenFilter` before `ExceptionTranslationFilter`
     (access-token minting on `POST /jwt/refresh`), wired with the configurer's
     `accessTokenStringSerializer` so the response carries a real JWS
+  - registers `JwtLogoutFilter` after `ExceptionTranslationFilter`
+    (token deactivation on `POST /jwt/logout`), wired with the configurer's
+    `JdbcTemplate`
   - registers a `PreAuthenticatedAuthenticationProvider` backed by
     `TokenAuthenticationUserDetailsService`
   - in `init()` disables CSRF for `POST /jwt/tokens` via
@@ -91,6 +94,13 @@ All endpoints require authentication; the filter chain is stateless.
   principal is a `TokenUser` carrying a `JWT_REFRESH` authority (i.e. an access
   token cannot be used here), derives a new access token via `DefaultAccessTokenFactory`
   and writes it as JSON. Refresh token itself is not rotated in this implementation.
+- `JwtLogoutFilter` — `OncePerRequestFilter` matched to `POST /jwt/logout`. Loads
+  the `SecurityContext` from `RequestAttributeSecurityContextRepository`,
+  verifies the principal is a `TokenUser` carrying a `JWT_LOGOUT` authority
+  (present only on refresh tokens, so logout can only be triggered with the
+  refresh token), then inserts the token's `id` and `expiresAt` into
+  `t_deactivated_token` and returns `204 No Content`. Any other case raises
+  `AccessDeniedException`.
 - `JwtAuthenticationConverter` — `AuthenticationConverter` that reads the
   `Authorization` header, requires the `Bearer ` prefix, tries to parse the
   remainder first as an access (JWS) then as a refresh (JWE) token. On success
@@ -99,9 +109,10 @@ All endpoints require authentication; the filter chain is stateless.
 - `TokenAuthenticationUserDetailsService` — implements
   `AuthenticationUserDetailsService<PreAuthenticatedAuthenticationToken>`,
   converts the `Token` carried as principal into a `TokenUser` whose
-  authorities come from the token claims. `credentialsNonExpired` is set to
-  `token.expiresAt() > now()` — this is the main way expired tokens are
-  rejected. Non-`Token` principals raise `UsernameNotFoundException`.
+  authorities come from the token claims. `credentialsNonExpired` is computed as
+  `!exists(t_deactivated_token where id = token.id) && token.expiresAt() > now()` —
+  so both expired and deactivated (logged-out) tokens are rejected here.
+  Non-`Token` principals raise `UsernameNotFoundException`.
 - `TokenUser` — extends `org.springframework.security.core.userdetails.User`
   and keeps the raw `Token` accessible via `getToken()` for downstream code.
 
@@ -177,6 +188,162 @@ Served from `src/main/resources/static/`:
   `SecurityConfig`
 - `public/sign-in.html` — login form
 - `public/403.html` — access denied page
+
+### 2.7 Фильтры — простыми словами
+
+В цепочке стоят три «своих» фильтра плюс стандартные фильтры Spring Security
+(HTTP Basic, CSRF, ExceptionTranslation и т.д.). Каждый из трёх отвечает за
+одну конкретную задачу.
+
+#### `RequestJwsTokensFilter` — «выдать пару токенов»
+
+- **Когда срабатывает:** только на `POST /jwt/tokens`.
+- **Что делает:** берёт уже аутентифицированного пользователя из
+  `SecurityContext` (пользователь пришёл с HTTP Basic — логин/пароль), создаёт
+  для него **refresh token** и из него же **access token**, сериализует оба и
+  отдаёт клиенту JSON-ом.
+- **Зачем:** это «точка входа» — место, где пользователь меняет логин/пароль
+  на пару JWT, чтобы дальше не слать пароль с каждым запросом.
+- **Важно:** если запрос уже был аутентифицирован по токену
+  (`PreAuthenticatedAuthenticationToken`), фильтр отказывает — нельзя чеканить
+  новые токены, предъявив старый токен, только по HTTP Basic.
+
+#### `AuthenticationFilter` + `JwtAuthenticationConverter` — «проверить Bearer»
+
+- **Когда срабатывает:** на любом запросе, где есть заголовок
+  `Authorization: Bearer <...>`. Зарегистрирован **перед** `CsrfFilter`.
+- **Что делает:**
+  1. `JwtAuthenticationConverter` читает заголовок, отрезает `Bearer `,
+     пробует распарсить строку сначала как access (JWS), потом как refresh
+     (JWE).
+  2. Если получилось — отдаёт `PreAuthenticatedAuthenticationToken`, который
+     дальше обрабатывает `PreAuthenticatedAuthenticationProvider` и превращает
+     `Token` в `TokenUser` (`UserDetails`).
+  3. На успехе вызывает `CsrfFilter.skipRequest(request)` — для токен-запросов
+     CSRF не нужен.
+  4. На провале отдаёт `403 Invalid or expired token`.
+- **Зачем:** это «охранник» на всех защищённых эндпоинтах. Проверяет, что
+  токен настоящий, подпись/шифр валидны, срок жизни не истёк
+  (`credentialsNonExpired = expiresAt > now`).
+
+#### `RefreshTokenFilter` — «обменять refresh на новый access»
+
+- **Когда срабатывает:** только на `POST /jwt/refresh`.
+- **Что делает:** ожидает, что к этому моменту `AuthenticationFilter` уже
+  положил в `SecurityContext` пользователя с refresh-токеном. Проверяет, что
+  у принципала есть authority `JWT_REFRESH` (это метка «я refresh, а не
+  access»), вызывает `DefaultAccessTokenFactory`, сериализует новый access и
+  отдаёт JSON-ом.
+- **Зачем:** продлить сессию без повторного ввода пароля. Сам refresh при
+  этом **не обновляется** — используется повторно до истечения.
+- **Защита:** authority `JWT_REFRESH` не даёт подсунуть сюда access-токен —
+  у access её нет, проверка не пройдёт.
+
+#### `JwtLogoutFilter` — «деактивировать токен»
+
+- **Когда срабатывает:** только на `POST /jwt/logout`.
+- **Что делает:** берёт `SecurityContext` из
+  `RequestAttributeSecurityContextRepository`, проверяет что принципал —
+  `TokenUser` и у него есть authority `JWT_LOGOUT`. Затем записывает
+  `token.id` и `token.expiresAt` в таблицу `t_deactivated_token` и возвращает
+  `204 No Content`. Если контекста нет или условий нет — бросает
+  `AccessDeniedException`.
+- **Зачем:** выключить активную сессию (например, «выйти» с устройства), не
+  дожидаясь естественного истечения срока.
+- **Защита:** authority `JWT_LOGOUT` есть **только у refresh-токена**
+  (добавляется в `DefaultRefreshTokenFactory` и срезается в
+  `DefaultAccessTokenFactory`). Поэтому логаут можно вызвать только предъявив
+  refresh — access не подойдёт.
+
+#### Почему блокируется именно refresh и как при этом «выключается» access
+
+Короткий ответ: **access и refresh делят один и тот же `id`**, а проверка
+«не деактивирован ли токен» выполняется в `TokenAuthenticationUserDetailsService`
+на **каждом** запросе — и для access, и для refresh.
+
+Детали:
+
+1. `DefaultAccessTokenFactory.apply(refreshToken)` создаёт новый `Token`,
+   передавая `refreshToken.id()` как id access-токена — он **не
+   перегенерируется**. То есть у пары access+refresh для одной сессии — общий
+   UUID.
+2. `JwtLogoutFilter` пишет в `t_deactivated_token` этот общий UUID.
+3. На любом защищённом запросе срабатывает цепочка
+   `AuthenticationFilter` → `PreAuthenticatedAuthenticationProvider` →
+   `TokenAuthenticationUserDetailsService`. Последний считает
+   `credentialsNonExpired` как
+   `!exists(t_deactivated_token where id = token.id) && expiresAt > now`. Если
+   id найден — `credentialsNonExpired = false`, Spring Security отклонит
+   аутентификацию, `AuthenticationFilter` отдаст `403 Invalid or expired
+   token`.
+4. Таким образом, одна запись в БД блокирует сразу и refresh (нельзя больше
+   чеканить новые access через `/jwt/refresh`), и уже выданный access (он
+   перестанет работать на ближайшем же запросе).
+
+Почему «входная точка» логаута — именно refresh, а не access:
+
+- **Единый id сессии живёт в refresh.** Access — производное, его id берётся
+  у refresh. Логично «закрывать сессию» через долгоживущий токен, который и
+  задаёт её идентичность.
+- **Безопасность.** Access-токены короткоживущие и чаще «гуляют» по сети
+  (уходят с каждым запросом). Если бы логаут разрешал access, утёкший access
+  позволил бы злоумышленнику принудительно завершать сессию жертвы. Refresh
+  же отправляется только на `/jwt/refresh` и `/jwt/logout` — поверхность
+  утечки меньше.
+- **Механизм реализован через authority.** `JWT_LOGOUT` кладётся только в
+  refresh (`DefaultRefreshTokenFactory`), а `DefaultAccessTokenFactory`
+  оставляет только `GRANT_*`-authority — так access физически не может пройти
+  проверку в `JwtLogoutFilter`.
+
+Замечание про «web-контроллеры»: их в проекте действительно нет — вся
+обработка `/jwt/tokens`, `/jwt/refresh`, `/jwt/logout` сделана фильтрами,
+которые сами пишут ответ и не передают запрос дальше в
+`DispatcherServlet`. Но таблица `t_deactivated_token` читается не
+контроллером, а `TokenAuthenticationUserDetailsService` — то есть **внутри
+цепочки аутентификации Spring Security**, до любых контроллеров. Поэтому
+блокировка действует на все защищённые эндпоинты без исключения.
+
+#### Откуда берётся **refresh token**
+
+1. Клиент логинится HTTP Basic-ом на `POST /jwt/tokens`.
+2. `RequestJwsTokensFilter` берёт `Authentication` и передаёт в
+   `DefaultRefreshTokenFactory` (`Function<Authentication, Token>`).
+3. Фабрика собирает `Token` с authority-ями:
+   - `JWT_REFRESH` — метка «это refresh»;
+   - `JWT_LOGOUT` — нужен для логаута;
+   - `GRANT_<ROLE>` — **оригинальные роли пользователя с префиксом**, чтобы
+     потом их можно было перенести в access.
+4. `RefreshTokenJweStringSerializer` превращает `Token` в JWE (`dir` +
+   `A128GCM`), зашифровано ключом `jwt.refresh-token-key`. Клиент видит
+   непрозрачную строку — claims спрятаны.
+
+#### Откуда берётся **access token**
+
+Есть два пути:
+
+- **При первичном логине** (`POST /jwt/tokens`): `RequestJwsTokensFilter`
+  сначала строит refresh, потом передаёт его в `DefaultAccessTokenFactory`
+  (`Function<Token, Token>`). Фабрика:
+  - срезает срок жизни до короткого (по умолчанию 5 минут);
+  - оставляет только `GRANT_*` authority-и, снимая с них префикс `GRANT_` —
+    так оригинальные роли `ROLE_MANAGER` и т.п. попадают в access;
+  - `JWT_REFRESH` / `JWT_LOGOUT` в access **не попадают**.
+  Затем `AccessTokenJwsStringSerializer` подписывает токен HS256 ключом
+  `jwt.access-token-key` и выдаёт JWS. JWS — подписан, но не зашифрован: его
+  claims видны всем, но подделать нельзя.
+
+- **При рефреше** (`POST /jwt/refresh`): `RefreshTokenFilter` берёт `Token`
+  из `TokenUser` (тот самый refresh, по которому пришёл запрос) и прогоняет
+  через ту же `DefaultAccessTokenFactory`. Получается новый свежий access,
+  refresh остаётся прежним.
+
+#### Почему access — JWS, а refresh — JWE
+
+- **Access (JWS, HS256):** проверяется на каждом запросе, нужно быстро и
+  дёшево. Подписи достаточно, чтобы гарантировать целостность.
+- **Refresh (JWE, `dir` + `A128GCM`):** содержит «служебные» authority-и
+  (`JWT_REFRESH`, `JWT_LOGOUT`, `GRANT_*`), которые клиенту знать не нужно —
+  поэтому токен шифруется, а не просто подписывается.
 
 ---
 

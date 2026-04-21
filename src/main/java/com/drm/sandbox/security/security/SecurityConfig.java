@@ -27,7 +27,8 @@ public class SecurityConfig {
     @Bean
     public JwtAuthenticationConfigurer jwtAuthenticationConfigurer(
             @Value("${jwt.access-token-key}") String accessTokeKey,
-            @Value("${jwt.refresh-token-key}") String refreshTokenKey
+            @Value("${jwt.refresh-token-key}") String refreshTokenKey,
+            JdbcTemplate jdbcTemplate
     ) throws ParseException, JOSEException {
         return new JwtAuthenticationConfigurer()
                 .accessTokenStringSerializer(new AccessTokenJwsStringSerializer(
@@ -41,7 +42,8 @@ public class SecurityConfig {
                 )
                 .refreshTokenStringDeserializer(new RefreshTokenJweStringDeserializer(
                         new DirectDecrypter(OctetSequenceKey.parse(refreshTokenKey))
-                ));
+                ))
+                .jdbcTemplate(jdbcTemplate);
 
     }
 

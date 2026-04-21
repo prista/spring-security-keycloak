@@ -1,5 +1,8 @@
 package com.drm.sandbox.security;
 
+import lombok.RequiredArgsConstructor;
+import lombok.Setter;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.AuthenticationUserDetailsService;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -8,8 +11,11 @@ import org.springframework.security.web.authentication.preauth.PreAuthenticatedA
 
 import java.time.Instant;
 
+@RequiredArgsConstructor
 public class TokenAuthenticationUserDetailsService
         implements AuthenticationUserDetailsService<PreAuthenticatedAuthenticationToken> {
+
+    private final JdbcTemplate jdbcTemplate;
 
     @Override
     public UserDetails loadUserDetails(PreAuthenticatedAuthenticationToken authenticationToken)
@@ -20,7 +26,10 @@ public class TokenAuthenticationUserDetailsService
                     "nopassword",
                     true,
                     true,
-                    token.expiresAt().isAfter(Instant.now()),
+                    !this.jdbcTemplate.queryForObject("""
+                            select exists(select id from t_deactivated_token where id = ?)
+                            """, Boolean.class, token.id())
+                            && token.expiresAt().isAfter(Instant.now()),
                     true,
                     token.authorities().stream()
                             .map(SimpleGrantedAuthority::new)

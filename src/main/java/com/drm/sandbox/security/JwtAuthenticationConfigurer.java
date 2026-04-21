@@ -2,7 +2,9 @@ package com.drm.sandbox.security;
 
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.Builder;
+import lombok.Setter;
 import org.springframework.http.HttpMethod;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -23,6 +25,7 @@ public class JwtAuthenticationConfigurer
     private Function<Token, String> accessTokenStringSerializer = Objects::toString; // return (token == null) ? "null" : token.toString();
     private Function<String, Token> accessTokenStringDeserializer;
     private Function<String, Token> refreshTokenStringDeserializer;
+    private JdbcTemplate jdbcTemplate;
 
     public JwtAuthenticationConfigurer refreshTokenStringSerializer(final Function<Token, String> refreshTokenStringSerializer) {
         this.refreshTokenStringSerializer = refreshTokenStringSerializer;
@@ -41,6 +44,11 @@ public class JwtAuthenticationConfigurer
 
     public JwtAuthenticationConfigurer refreshTokenStringDeserializer(Function<String, Token> refreshTokenStringDeserializer) {
         this.refreshTokenStringDeserializer = refreshTokenStringDeserializer;
+        return this;
+    }
+
+    public JwtAuthenticationConfigurer jdbcTemplate(JdbcTemplate jdbcTemplate) {
+        this.jdbcTemplate = jdbcTemplate;
         return this;
     }
 
@@ -76,14 +84,18 @@ public class JwtAuthenticationConfigurer
                 response.sendError(HttpServletResponse.SC_FORBIDDEN, "Invalid or expired token"));
 
         var authenticationProvider = new PreAuthenticatedAuthenticationProvider();
-        authenticationProvider.setPreAuthenticatedUserDetailsService(new TokenAuthenticationUserDetailsService());
+        authenticationProvider.setPreAuthenticatedUserDetailsService(
+                new TokenAuthenticationUserDetailsService(this.jdbcTemplate));
 
         var refreshTokenFilter = new RefreshTokenFilter();
         refreshTokenFilter.setAccessTokenStringSerializer(this.accessTokenStringSerializer);
 
+        var jwtLogoutFilter = new JwtLogoutFilter(this.jdbcTemplate);
+
         builder.addFilterAfter(requestJwtTokensFilter, ExceptionTranslationFilter.class)
                 .addFilterBefore(jwtAuthenticationFilter, CsrfFilter.class)
                 .addFilterBefore(refreshTokenFilter, ExceptionTranslationFilter.class)
+                .addFilterAfter(jwtLogoutFilter, ExceptionTranslationFilter.class)
                 .authenticationProvider(authenticationProvider);
     }
 }
