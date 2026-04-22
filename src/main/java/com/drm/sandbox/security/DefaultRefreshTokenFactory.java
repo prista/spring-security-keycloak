@@ -1,5 +1,6 @@
 package com.drm.sandbox.security;
 
+import lombok.Setter;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 
@@ -11,12 +12,10 @@ import java.util.function.Function;
 
 public class DefaultRefreshTokenFactory implements Function<Authentication, Token> {
 
+    @Setter
     private Duration tokenTtl = Duration.ofDays(1);
 
-    public void setTokenTtl(final Duration tokenTtl) {
-        this.tokenTtl = tokenTtl;
-    }
-
+    // берем на вход basic auth данные
     @Override
     public Token apply(final Authentication authentication) {
         var authorities = new LinkedList<String>();
