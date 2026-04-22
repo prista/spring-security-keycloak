@@ -15,15 +15,15 @@ public class DefaultRefreshTokenFactory implements Function<Authentication, Toke
     @Setter
     private Duration tokenTtl = Duration.ofDays(1);
 
-    // берем на вход basic auth данные
     @Override
     public Token apply(final Authentication authentication) {
         var authorities = new LinkedList<String>();
-        authorities.add("JWT_REFRESH");
-        authorities.add("JWT_LOGOUT");
+        authorities.add("JWT_REFRESH"); // custom grant
+        authorities.add("JWT_LOGOUT");  // custom grant
         authentication.getAuthorities()
                 .stream()
                 .map(GrantedAuthority::getAuthority)
+                // SS grants (ROLE_MANAGER -> GRANT_ROLE_MANAGER)
                 .map(authority -> "GRANT_" + authority)
                 .forEach(authorities::add);
 
