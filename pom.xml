@@ -5,6 +5,14 @@
 	<groupId>com.drm.sandbox</groupId>
 	<artifactId>security</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
+	<packaging>pom</packaging>
+
+	<modules>
+		<module>bearer-authentication</module>
+<!--		<module>shared</module>-->
+<!--		<module>cookie-authentication</module>-->
+	</modules>
+
 
 	<properties>
 		<maven.compiler.source>${java.version}</maven.compiler.source>
