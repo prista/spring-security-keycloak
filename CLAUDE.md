@@ -4,15 +4,35 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 See [SPEC.md](SPEC.md) for full technical specification.
 
+## Project layout
+
+Multi-module Maven project:
+
+- `security/` — parent POM (`<packaging>pom</packaging>`), holds shared
+  `dependencyManagement`, dependencies and plugin config
+- `security/bearer-authentication/` — the Spring Boot application module;
+  all Java sources, resources, tests, `application.yml`, `schema.sql` /
+  `data.sql` live here
+- `security/docker-compose.yml` — PostgreSQL for local dev (shared across
+  future modules)
+
+Additional sibling modules (`shared`, `cookie-authentication`) are commented
+out in the parent POM and not yet implemented.
+
 ## Build & Run
 
+Run from the project root (parent POM):
+
 ```bash
-docker compose up -d          # Start PostgreSQL
-./mvnw spring-boot:run        # Run the application (https://localhost:8443)
-./mvnw compile                # Compile
-./mvnw test                   # Run all tests
-./mvnw package                # Build JAR
+docker compose up -d                                   # Start PostgreSQL
+./mvnw -pl bearer-authentication spring-boot:run       # Run the app (https://localhost:8443)
+./mvnw compile                                         # Compile all modules
+./mvnw test                                            # Run all tests
+./mvnw package                                         # Build JARs
 ```
+
+`spring-boot:run` must target the `bearer-authentication` module (the parent
+is packaging-only and has no main class). Alternatively `cd bearer-authentication && ../mvnw spring-boot:run`.
 
 The app listens on **HTTPS 8443** (HTTP/2 enabled). A dev PKCS#12 keystore must
 exist at `~/tmp/ssl/keystore/localhost.p12`; see SPEC.md §3.2
@@ -95,6 +115,8 @@ carries a `JWT_REFRESH` authority; `RefreshTokenFilter` checks for it before
 minting, so an access token cannot be used here.
 
 ## Key classes
+
+All classes live under `bearer-authentication/src/main/java/com/drm/sandbox/security/`.
 
 - `security/SecurityConfig` — filter chain, HTTP Basic, stateless sessions,
   `/manager.html` restricted to `ROLE_MANAGER`; declares the JDBC

@@ -30,9 +30,9 @@ clients, layered on top of HTTP Basic for initial login.
 ### Tech Stack
 
 - Java 21
-- Spring Boot 4.0.3 (via `dependencyManagement`, no parent POM)
+- Spring Boot 4.0.3 (imported via `dependencyManagement` in the parent POM)
 - Spring Security 7
-- Maven
+- Maven — **multi-module project** (`security` parent POM + `bearer-authentication` module)
 - Spring Web (`spring-boot-starter-web`)
 - Spring Security (`spring-boot-starter-security`)
 - Spring JDBC (`spring-boot-starter-jdbc`)
@@ -43,11 +43,29 @@ clients, layered on top of HTTP Basic for initial login.
 - Testcontainers + `spring-boot-testcontainers` (integration tests)
 - Docker Compose (local PostgreSQL)
 
+### Module layout
+
+```
+security/                           ← parent POM (<packaging>pom</packaging>)
+├── pom.xml                         shared dependencyManagement, dependencies, plugins
+├── docker-compose.yml              PostgreSQL for local dev
+└── bearer-authentication/          ← Spring Boot application module
+    ├── pom.xml                     inherits everything from parent
+    └── src/
+        ├── main/java/com/drm/sandbox/security/     all Java sources
+        ├── main/resources/                          application.yml, schema.sql, data.sql, static/
+        └── test/java/com/drm/sandbox/security/     TestcontainersConfiguration, tests
+```
+
+The parent POM declares additional modules (`shared`, `cookie-authentication`)
+as commented-out placeholders for future work. Today only
+`bearer-authentication` exists.
+
 ---
 
 ## 2. Architecture
 
-Base package: `com.drm.sandbox.security`
+Base package: `com.drm.sandbox.security` (under `bearer-authentication/src/main/java`)
 
 ### 2.1 Security Layer
 
@@ -154,9 +172,10 @@ planned `GreetingsRestController`) are on the roadmap but not yet added.
 
 ### 2.4 Database Schema
 
-Managed via `schema.sql` / `data.sql` with `spring.sql.init.mode: always`. The
-schema script drops all tables with `cascade` before recreating them, so the
-database is rebuilt from scratch on every application start.
+Managed via `bearer-authentication/src/main/resources/schema.sql` /
+`data.sql` with `spring.sql.init.mode: always`. The schema script drops all
+tables with `cascade` before recreating them, so the database is rebuilt from
+scratch on every application start.
 
 Tables:
 - `t_user` — `id`, `c_username` (unique), `c_password`
@@ -168,7 +187,7 @@ Seed data:
 
 ### 2.5 Transport Security
 
-Configured in `application.yml`:
+Configured in `bearer-authentication/src/main/resources/application.yml`:
 - `server.port: 8443`
 - `server.ssl.*` — PKCS#12 keystore at `${user.home}/tmp/ssl/keystore/localhost.p12`
   (alias `localhost`, password `password`)
@@ -182,7 +201,7 @@ show a warning.
 
 ### 2.6 Static Content
 
-Served from `src/main/resources/static/`:
+Served from `bearer-authentication/src/main/resources/static/`:
 - `hello.html` — greeting page
 - `manager.html` — manager-only page, restricted to `ROLE_MANAGER` in
   `SecurityConfig`
@@ -351,7 +370,9 @@ Served from `src/main/resources/static/`:
 
 ### 3.1 Docker Compose
 
-`docker-compose.yml` provides PostgreSQL `postgres:17.4-alpine` for local development.
+`docker-compose.yml` (at the project root, next to the parent POM) provides
+PostgreSQL `postgres:17.4-alpine` for local development. Shared across all
+modules.
 
 ```
 DB name:     security
@@ -375,6 +396,21 @@ keytool -genkeypair -alias localhost -keyalg RSA -keysize 2048 -storetype PKCS12
 
 ### 3.3 Testing
 
-- `TestcontainersConfiguration` provides an ephemeral `PostgreSQLContainer` with
-  `@ServiceConnection`, auto-overriding datasource properties
+- `bearer-authentication/src/test/java/.../TestcontainersConfiguration`
+  provides an ephemeral `PostgreSQLContainer` with `@ServiceConnection`,
+  auto-overriding datasource properties
 - Image: `postgres:17.4-alpine`
+
+### 3.4 Build commands
+
+Run from the project root:
+
+```bash
+./mvnw -pl bearer-authentication spring-boot:run   # run the app
+./mvnw compile                                     # compile all modules
+./mvnw test                                        # run all tests
+./mvnw package                                     # build JARs
+```
+
+`spring-boot:run` must target the module (`-pl bearer-authentication` or
+`cd bearer-authentication`); the parent POM has no main class.
