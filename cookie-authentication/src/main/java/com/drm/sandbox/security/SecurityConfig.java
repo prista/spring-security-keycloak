@@ -16,6 +16,11 @@ import org.springframework.security.web.access.ExceptionTranslationFilter;
 public class SecurityConfig {
 
     @Bean
+    public TokenCookieAuthenticationConfigurer tokenCookieAuthenticationConfigurer() {
+        return new TokenCookieAuthenticationConfigurer();
+    }
+
+    @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http,
                                                    TokenCookieAuthenticationConfigurer configurer
     ) throws Exception {
