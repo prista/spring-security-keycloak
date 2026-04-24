@@ -1,5 +1,6 @@
 package com.drm.sandbox.security;
 
+import com.drm.sandbox.Token;
 import lombok.Setter;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;

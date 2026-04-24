@@ -1,5 +1,6 @@
 package com.drm.sandbox.security;
 
+import com.drm.sandbox.Token;
 import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.JWEDecrypter;
 import com.nimbusds.jwt.EncryptedJWT;

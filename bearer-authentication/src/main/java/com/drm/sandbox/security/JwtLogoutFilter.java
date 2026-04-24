@@ -42,7 +42,7 @@ public class JwtLogoutFilter extends OncePerRequestFilter {
                 var context = this.contextRepository.loadDeferredContext(request).get();
 
                 if (context.getAuthentication() instanceof PreAuthenticatedAuthenticationToken
-                        && context.getAuthentication().getPrincipal() instanceof TokenUser user
+                        && context.getAuthentication().getPrincipal() instanceof com.drm.sandbox.TokenUser user
                         && context.getAuthentication().getAuthorities().contains(new SimpleGrantedAuthority("JWT_LOGOUT"))) {
                     // save info about BLOCKED token
                     this.jdbcTemplate.update("insert into t_deactivated_token (id, c_keep_until) values (?, ?)",

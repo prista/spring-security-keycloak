@@ -8,7 +8,7 @@
 		<version>0.0.1-SNAPSHOT</version>
 	</parent>
 
-	<artifactId>bearer-authentication</artifactId>
+	<artifactId>shared</artifactId>
 
 	<properties>
 		<maven.compiler.source>${java.version}</maven.compiler.source>
@@ -17,12 +17,5 @@
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 	</properties>
 
-	<dependencies>
-		<dependency>
-			<groupId>com.drm.sandbox</groupId>
-			<artifactId>shared</artifactId>
-			<version>0.0.1-SNAPSHOT</version>
-		</dependency>
-	</dependencies>
 
 </project>

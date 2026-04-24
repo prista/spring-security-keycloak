@@ -1,4 +1,4 @@
-package com.drm.sandbox.security;
+package com.drm.sandbox;
 
 import lombok.Getter;
 import org.jspecify.annotations.Nullable;

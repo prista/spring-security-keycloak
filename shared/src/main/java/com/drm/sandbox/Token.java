@@ -1,4 +1,4 @@
-package com.drm.sandbox.security;
+package com.drm.sandbox;
 
 import java.time.Instant;
 import java.util.List;

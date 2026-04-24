@@ -1,7 +1,6 @@
-package com.drm.sandbox.security;
+package com.drm.sandbox;
 
 import lombok.RequiredArgsConstructor;
-import lombok.Setter;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.AuthenticationUserDetailsService;
@@ -22,7 +21,7 @@ public class TokenAuthenticationUserDetailsService
             throws UsernameNotFoundException {
         if (authenticationToken.getPrincipal() instanceof Token token) {
             // turn this token into UserDetails object
-            return new TokenUser(token.subject(),
+            return new com.drm.sandbox.TokenUser(token.subject(),
                     "nopassword",
                     true,
                     true,

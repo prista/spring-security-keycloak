@@ -1,5 +1,6 @@
 package com.drm.sandbox.security;
 
+import com.drm.sandbox.Token;
 import lombok.Setter;
 
 import java.time.Duration;

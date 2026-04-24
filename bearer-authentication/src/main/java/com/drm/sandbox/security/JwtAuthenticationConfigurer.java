@@ -1,8 +1,7 @@
 package com.drm.sandbox.security;
 
+import com.drm.sandbox.Token;
 import jakarta.servlet.http.HttpServletResponse;
-import lombok.Builder;
-import lombok.Setter;
 import org.springframework.http.HttpMethod;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -85,7 +84,7 @@ public class JwtAuthenticationConfigurer
 
         var authenticationProvider = new PreAuthenticatedAuthenticationProvider();
         authenticationProvider.setPreAuthenticatedUserDetailsService(
-                new TokenAuthenticationUserDetailsService(this.jdbcTemplate));
+                new com.drm.sandbox.TokenAuthenticationUserDetailsService(this.jdbcTemplate));
 
         var refreshTokenFilter = new RefreshTokenFilter();
         refreshTokenFilter.setAccessTokenStringSerializer(this.accessTokenStringSerializer);

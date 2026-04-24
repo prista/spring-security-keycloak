@@ -1,5 +1,6 @@
 package com.drm.sandbox.security;
 
+import com.drm.sandbox.Token;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -45,7 +46,7 @@ public class RefreshTokenFilter extends OncePerRequestFilter {
                 var context = this.contextRepository.loadDeferredContext(request).get();
 
                 if (context.getAuthentication() instanceof PreAuthenticatedAuthenticationToken
-                        && context.getAuthentication().getPrincipal() instanceof TokenUser user
+                        && context.getAuthentication().getPrincipal() instanceof com.drm.sandbox.TokenUser user
                         // check whether it has refresh authority
                         && context.getAuthentication().getAuthorities().contains(new SimpleGrantedAuthority("JWT_REFRESH"))) {
                     var accessToken = this.accessTokenFactory.apply(user.getToken());
