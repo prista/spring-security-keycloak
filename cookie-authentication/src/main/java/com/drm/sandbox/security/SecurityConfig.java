@@ -1,5 +1,9 @@
 package com.drm.sandbox.security;
 
+import com.nimbusds.jose.KeyLengthException;
+import com.nimbusds.jose.crypto.DirectEncrypter;
+import com.nimbusds.jose.jwk.OctetSequenceKey;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -11,9 +15,23 @@ import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.ExceptionTranslationFilter;
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
+
+import java.text.ParseException;
 
 @Configuration
 public class SecurityConfig {
+
+    @Bean
+    public TokenCookieJweStringSerializer tokenCookieJweStringSerializer(
+            @Value("${jwt.cookie-token-key}") String cookieTokenKey
+    ) throws ParseException, KeyLengthException {
+        return new TokenCookieJweStringSerializer(new DirectEncrypter(
+                OctetSequenceKey.parse(cookieTokenKey)
+        ));
+    }
+
 
     @Bean
     public TokenCookieAuthenticationConfigurer tokenCookieAuthenticationConfigurer() {
@@ -22,17 +40,29 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http,
+                                                   TokenCookieJweStringSerializer tokenCookieJweStringSerializer,
                                                    TokenCookieAuthenticationConfigurer configurer
     ) throws Exception {
+        var strategy = new TokenCookieSessionAuthenticationStrategy();
+        strategy.setTokenStringSerializer(tokenCookieJweStringSerializer);
+
         http
                 .httpBasic(Customizer.withDefaults())
                 .sessionManagement(session ->
-                        session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                        session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+                                .sessionAuthenticationStrategy(strategy))
                 .addFilterAfter(new GetCsrfTokenFilter(), ExceptionTranslationFilter.class)
                 .authorizeHttpRequests(c -> c
                         .requestMatchers("/manager.html", "/manager").hasRole("MANAGER")
                         .requestMatchers("/error", "/index.html").permitAll()
-                        .anyRequest().authenticated());
+                        .anyRequest().authenticated())
+                .csrf(
+                        csrf -> csrf.csrfTokenRepository(new CookieCsrfTokenRepository())
+                                .csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler())
+                                .sessionAuthenticationStrategy((authentication,
+                                                                request,
+                                                                response) -> {})
+                );
 
         http.apply(configurer);
 
