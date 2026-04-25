@@ -36,7 +36,7 @@ public class TokenCookieSessionAuthenticationStrategy
             var cookie = new Cookie("__Host-auth-token", tokenString);
             cookie.setPath("/");
             cookie.setDomain(null);
-            cookie.setSecure(false);
+            cookie.setSecure(true);
             cookie.setHttpOnly(true);
             cookie.setMaxAge((int) ChronoUnit.SECONDS.between(Instant.now(), token.expiresAt()));
 
