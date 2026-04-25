@@ -1,6 +1,7 @@
 package com.drm.sandbox.security;
 
 import com.nimbusds.jose.KeyLengthException;
+import com.nimbusds.jose.crypto.DirectDecrypter;
 import com.nimbusds.jose.crypto.DirectEncrypter;
 import com.nimbusds.jose.jwk.OctetSequenceKey;
 import org.springframework.beans.factory.annotation.Value;
@@ -34,8 +35,13 @@ public class SecurityConfig {
 
 
     @Bean
-    public TokenCookieAuthenticationConfigurer tokenCookieAuthenticationConfigurer() {
-        return new TokenCookieAuthenticationConfigurer();
+    public TokenCookieAuthenticationConfigurer tokenCookieAuthenticationConfigurer(
+            @Value("${jwt.cookie-token-key}") String cookieTokenKey,
+            JdbcTemplate jdbcTemplate
+    ) throws ParseException, KeyLengthException {
+        return new TokenCookieAuthenticationConfigurer()
+                .tokenStringDeserializer(new TokenCookieJweStringDeserializer(new DirectDecrypter(OctetSequenceKey.parse(cookieTokenKey))))
+                .jdbcTemplate(jdbcTemplate);
     }
 
     @Bean
