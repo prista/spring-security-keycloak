@@ -54,6 +54,7 @@ public class SecurityConfig {
 
         http
                 .httpBasic(Customizer.withDefaults())
+                //.formLogin(Customizer.withDefaults())
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                                 .sessionAuthenticationStrategy(strategy))
