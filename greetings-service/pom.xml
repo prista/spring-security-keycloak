@@ -8,7 +8,7 @@
 		<version>0.0.1-SNAPSHOT</version>
 	</parent>
 
-	<artifactId>shared</artifactId>
+	<artifactId>greetings-service</artifactId>
 
 	<properties>
 		<maven.compiler.source>${java.version}</maven.compiler.source>
@@ -22,7 +22,10 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-web</artifactId>
 		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
+		</dependency>
 	</dependencies>
-
 
 </project>

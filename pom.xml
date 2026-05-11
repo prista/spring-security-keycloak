@@ -8,9 +8,10 @@
 	<packaging>pom</packaging>
 
 	<modules>
-		<module>bearer-authentication</module>
-		<module>shared</module>
-		<module>cookie-authentication</module>
+<!--		<module>bearer-authentication</module>-->
+<!--		<module>shared</module>-->
+<!--		<module>cookie-authentication</module>-->
+		<module>greetings-service</module>
 	</modules>
 
 
@@ -34,10 +35,6 @@
 	</dependencyManagement>
 
 	<dependencies>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-web</artifactId>
-		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-security</artifactId>
