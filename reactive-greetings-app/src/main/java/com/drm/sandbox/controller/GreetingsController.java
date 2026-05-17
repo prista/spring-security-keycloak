@@ -1,6 +1,9 @@
 package com.drm.sandbox.controller;
 
 import com.drm.sandbox.dto.Greetings;
+import org.springframework.security.oauth2.client.registration.ReactiveClientRegistrationRepository;
+import org.springframework.security.oauth2.client.web.reactive.function.client.ServerOAuth2AuthorizedClientExchangeFilterFunction;
+import org.springframework.security.oauth2.client.web.server.ServerOAuth2AuthorizedClientRepository;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -15,9 +18,14 @@ public class GreetingsController {
 
     private final WebClient webClient;
 
-    public GreetingsController() {
+    public GreetingsController(ReactiveClientRegistrationRepository clientRegistrationRepository,
+                               ServerOAuth2AuthorizedClientRepository authorizedClientRepository) {
+        var filter = new ServerOAuth2AuthorizedClientExchangeFilterFunction(
+                clientRegistrationRepository, authorizedClientRepository);
+        filter.setDefaultClientRegistrationId("greetings-app-client-credentials");
         this.webClient = WebClient.builder()
                 .baseUrl("http://localhost:8083")
+                .filter(filter)
                 .build();
     }
 
