@@ -22,10 +22,8 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         return http
-                .authorizeHttpRequests(customizer -> customizer
-                        .anyRequest()
-                        .authenticated())
-                //.authorizeHttpRequests(customizer -> customizer.anyRequest().hasRole("MANAGER"))
+                .authorizeHttpRequests(customizer ->
+                        customizer.anyRequest().hasRole("MANAGER"))
                 .oauth2Client(Customizer.withDefaults())
                 .oauth2Login(Customizer.withDefaults())
                 .build();
