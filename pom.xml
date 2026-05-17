@@ -13,6 +13,7 @@
 <!--		<module>cookie-authentication</module>-->
 		<module>greetings-service</module>
 		<module>reactive-greetings-service</module>
+		<module>greetings-app</module>
 	</modules>
 
 
