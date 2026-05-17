@@ -23,3 +23,4 @@ spring:
             scope:
               - openid
               - microprofile-jwt
+              #- greetings # This scope is required to get the "greetings" role in the access token
