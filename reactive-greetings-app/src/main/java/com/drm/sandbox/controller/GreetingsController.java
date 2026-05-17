@@ -22,7 +22,7 @@ public class GreetingsController {
                                ServerOAuth2AuthorizedClientRepository authorizedClientRepository) {
         var filter = new ServerOAuth2AuthorizedClientExchangeFilterFunction(
                 clientRegistrationRepository, authorizedClientRepository);
-        filter.setDefaultClientRegistrationId("greetings-app-client-credentials");
+        filter.setDefaultClientRegistrationId("greetings-app-authorization-code");
         this.webClient = WebClient.builder()
                 .baseUrl("http://localhost:8083")
                 .filter(filter)
