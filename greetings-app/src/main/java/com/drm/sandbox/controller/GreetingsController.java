@@ -26,9 +26,9 @@ public class GreetingsController {
     private final OAuth2AuthorizedClientManager authorizedClientManager;
 
     public GreetingsController(ClientRegistrationRepository clientRegistrationRepository,
-                               OAuth2AuthorizedClientService authorizedClientService) {
-        this.authorizedClientManager = new AuthorizedClientServiceOAuth2AuthorizedClientManager(
-                clientRegistrationRepository, authorizedClientService);
+                               OAuth2AuthorizedClientRepository authorizedClientRepository) {
+        this.authorizedClientManager = new DefaultOAuth2AuthorizedClientManager(
+                clientRegistrationRepository, authorizedClientRepository);
 
         this.restClient = RestClient.builder()
                 .baseUrl("http://localhost:8081")
@@ -39,8 +39,8 @@ public class GreetingsController {
                     if (!request.getHeaders().containsHeader(HttpHeaders.AUTHORIZATION)) {
                         // 2. If the header is missing, we need to obtain an access token
                         var token = this.authorizedClientManager.authorize(
-                                        OAuth2AuthorizeRequest.withClientRegistrationId("greetings-app-client-credentials")
-                                                .principal("greetings-app")
+                                        OAuth2AuthorizeRequest.withClientRegistrationId("greetings-app-authorization-code")
+                                                .principal(SecurityContextHolder.getContext().getAuthentication())
                                                 .build())
                                 .getAccessToken().getTokenValue(); // Extract just the string value of the token
                         // 3. Add the fetched token to the request headers (as "Authorization: Bearer <token>")

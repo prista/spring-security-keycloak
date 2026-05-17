@@ -24,7 +24,7 @@ public class SecurityConfig {
         return http
                 .authorizeHttpRequests(customizer -> customizer
                         .anyRequest()
-                        .permitAll())
+                        .authenticated())
                 //.authorizeHttpRequests(customizer -> customizer.anyRequest().hasRole("MANAGER"))
                 .oauth2Client(Customizer.withDefaults())
                 .oauth2Login(Customizer.withDefaults())
