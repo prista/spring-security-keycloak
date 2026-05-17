@@ -14,6 +14,7 @@
 		<module>greetings-service</module>
 		<module>reactive-greetings-service</module>
 		<module>greetings-app</module>
+		<module>reactive-greetings-app</module>
 	</modules>
 
 
