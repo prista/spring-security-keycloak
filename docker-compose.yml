@@ -22,7 +22,7 @@ services:
     ports:
       - "18080:8080"
     volumes:
-      - ./keycloak/config/realm-export.json:/opt/keycloak/data/import/sandbox-export.json:ro
+      - ./keycloak/config/sandbox-export.json:/opt/keycloak/data/import/sandbox-export.json:ro
     restart: unless-stopped
 
 volumes:
